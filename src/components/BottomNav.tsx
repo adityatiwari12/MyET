@@ -1,5 +1,6 @@
 import { Home, Compass, Sparkles, User } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface BottomNavProps {
   currentScreen: string;
@@ -7,11 +8,12 @@ interface BottomNavProps {
 }
 
 export function BottomNav({ currentScreen, onNavigate }: BottomNavProps) {
+  const { t } = useLanguage();
   const navItems = [
-    { id: 'briefing', label: 'Briefing', icon: Home },
-    { id: 'explore', label: 'Explore', icon: Compass },
-    { id: 'ask', label: 'Ask MyET', icon: Sparkles },
-    { id: 'profile', label: 'Profile', icon: User },
+    { id: 'briefing', label: t('nav.briefing'), icon: Home },
+    { id: 'explore', label: t('nav.explore'), icon: Compass },
+    { id: 'ask', label: t('nav.ask'), icon: Sparkles },
+    { id: 'profile', label: t('nav.profile'), icon: User },
   ];
 
   return (

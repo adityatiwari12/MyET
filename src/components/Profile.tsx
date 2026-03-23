@@ -1,9 +1,22 @@
 import { Bell, Wallet, Lock, LogOut, ChevronRight, Check } from 'lucide-react';
-import { INTERESTS } from '../constants';
+import { INTERESTS, INTERESTS_HI } from '../constants';
 import { cn } from '../lib/utils';
+import { useState } from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
 
 export function Profile() {
-  const selectedInterests = ["Macroeconomics", "Geopolitics", "Emerging Tech", "Central Banking"];
+  const { language, setLanguage, t } = useLanguage();
+  const [selectedInterests, setSelectedInterests] = useState(["NSE/BSE", "Indian Fintech", "RBI Policy"]);
+
+  const toggleInterest = (interest: string) => {
+    setSelectedInterests(prev => 
+      prev.includes(interest) 
+        ? prev.filter(i => i !== interest)
+        : [...prev, interest]
+    );
+  };
+
+  const currentInterests = language === 'hi' ? INTERESTS_HI : INTERESTS;
 
   return (
     <div className="pb-32">
@@ -25,55 +38,70 @@ export function Profile() {
 
       <main className="max-w-screen-md mx-auto px-6 pt-24 space-y-12">
         <section className="space-y-2">
-          <h1 className="font-headline text-5xl font-extrabold tracking-tight text-on-surface">Your MyET</h1>
-          <p className="font-body text-on-surface-variant max-w-prose text-lg">Curating the intelligence that drives your perspective.</p>
+          <h1 className="font-headline text-5xl font-extrabold tracking-tight text-on-surface">{t('profile.title')}</h1>
+          <p className="font-body text-on-surface-variant max-w-prose text-lg">{t('profile.subtitle')}</p>
         </section>
 
         <section className="grid grid-cols-1 md:grid-cols-3 gap-1">
-          <StatCard label="Daily Briefs" value="12" />
-          <StatCard label="Insights Read" value="482" />
-          <StatCard label="Network Rank" value="Top 5%" />
+          <StatCard label={t('profile.stat.briefs')} value="12" />
+          <StatCard label={t('profile.stat.insights')} value="482" />
+          <StatCard label={t('profile.stat.rank')} value="Top 5%" />
         </section>
 
         <section className="space-y-6">
           <div className="flex items-baseline justify-between border-b border-outline-variant/10 pb-2">
-            <h2 className="font-label text-xs uppercase tracking-widest text-primary">Interests</h2>
-            <span className="font-label text-[10px] text-on-surface-variant">12 Selected</span>
+            <h2 className="font-label text-xs uppercase tracking-widest text-primary">{t('profile.interests')}</h2>
+            <span className="font-label text-[10px] text-on-surface-variant">{selectedInterests.length} {t('profile.selected')}</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {INTERESTS.map(interest => (
-              <button 
-                key={interest}
-                className={cn(
-                  "px-4 py-2 text-sm font-medium border transition-all",
-                  selectedInterests.includes(interest) 
-                    ? "bg-primary-container text-on-primary-container border-primary/20" 
-                    : "bg-surface-container-highest text-on-surface border-transparent hover:border-outline-variant"
-                )}
-              >
-                {interest}
-              </button>
-            ))}
+            {currentInterests.map((interest, idx) => {
+              const englishInterest = INTERESTS[idx];
+              const isSelected = selectedInterests.includes(englishInterest);
+              return (
+                <button 
+                  key={interest}
+                  onClick={() => toggleInterest(englishInterest)}
+                  className={cn(
+                    "px-4 py-2 text-sm font-medium border transition-all",
+                    isSelected 
+                      ? "bg-primary-container text-on-primary-container border-primary/20" 
+                      : "bg-surface-container-highest text-on-surface border-transparent hover:border-outline-variant"
+                  )}
+                >
+                  {interest}
+                </button>
+              );
+            })}
           </div>
         </section>
 
         <section className="space-y-6">
           <div className="flex items-baseline justify-between border-b border-outline-variant/10 pb-2">
-            <h2 className="font-label text-xs uppercase tracking-widest text-primary">Intelligence Language</h2>
+            <h2 className="font-label text-xs uppercase tracking-widest text-primary">{t('profile.language')}</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <LanguageCard label="English (Global)" sub="Primary Business Intel" active />
-            <LanguageCard label="Hindi (हिन्दी)" sub="Regional Insights" />
+            <LanguageCard 
+              label="English (Global)" 
+              sub="Primary Business Intel" 
+              active={language === 'en'} 
+              onClick={() => setLanguage('en')}
+            />
+            <LanguageCard 
+              label="Hindi (हिन्दी)" 
+              sub="Regional Insights" 
+              active={language === 'hi'} 
+              onClick={() => setLanguage('hi')}
+            />
           </div>
         </section>
 
         <section className="space-y-4 pt-4">
-          <SettingsLink icon={Wallet} label="Subscription & Billing" />
-          <SettingsLink icon={Lock} label="Privacy & AI Data Controls" />
+          <SettingsLink icon={Wallet} label={t('profile.billing')} />
+          <SettingsLink icon={Lock} label={t('profile.privacy')} />
           <button className="w-full flex items-center justify-between p-4 bg-surface-container-low hover:bg-surface-container-high transition-all text-left">
             <div className="flex items-center gap-4 text-error">
               <LogOut className="w-5 h-5" />
-              <span className="font-body">Terminate Session</span>
+              <span className="font-body">{t('profile.logout')}</span>
             </div>
           </button>
         </section>
@@ -91,9 +119,9 @@ function StatCard({ label, value }: { label: string, value: string }) {
   );
 }
 
-function LanguageCard({ label, sub, active }: { label: string, sub: string, active?: boolean }) {
+function LanguageCard({ label, sub, active, onClick }: { label: string, sub: string, active?: boolean, onClick: () => void }) {
   return (
-    <label className="flex items-center justify-between p-4 bg-surface-container-low cursor-pointer group hover:bg-surface-container-high transition-colors">
+    <label className="flex items-center justify-between p-4 bg-surface-container-low cursor-pointer group hover:bg-surface-container-high transition-colors" onClick={onClick}>
       <div className="flex flex-col">
         <span className="font-body font-semibold">{label}</span>
         <span className="font-label text-[10px] text-on-surface-variant uppercase tracking-tight">{sub}</span>

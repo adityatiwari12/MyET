@@ -1,13 +1,20 @@
-# MyET
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
 
-MyET is an AI-native financial intelligence platform built for Indian users. Instead of static articles, it delivers a continuously evolving view of the market tailored to each individual.
+# Run and deploy your AI Studio app
 
-The system tracks what the user follows, reads, and asks, then turns fragmented news into structured narratives. RBI decisions, market movements, startup funding, and policy changes are not shown as isolated updates but as connected stories with context, progression, and implications.
+This contains everything you need to run your app locally.
 
-Each session begins with a personalized briefing. Not a feed, but a clear picture of what has changed in the user’s financial world. Every story explains why it matters specifically to their interests, whether that is mutual funds, stocks, startups, or broader economic trends.
+View your app in AI Studio: https://ai.studio/apps/1a1579f7-688a-4a79-949b-75c934a698ee
 
-The conversational layer allows users to go deeper. Instead of searching, they can ask questions and get structured, context-aware explanations grounded in Indian finance. The system remembers intent and adapts over time, refining both content and responses.
+## Run Locally
 
-MyET also supports multilingual understanding, not just translation. Complex financial developments are explained in a way that fits the user’s language and context, making finance more accessible without losing depth.
+**Prerequisites:**  Node.js
 
-The result is a product that shifts news consumption into continuous understanding. Users don’t just read what happened. They track how things are evolving and what it means for them.
+
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`

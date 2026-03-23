@@ -3,6 +3,7 @@ import { MOCK_STORIES, Story } from '../constants';
 import { motion } from 'motion/react';
 import { useState } from 'react';
 import { geminiService } from '../services/geminiService';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface BriefingProps {
   onStoryClick: (story: Story) => void;
@@ -10,13 +11,18 @@ interface BriefingProps {
 
 export function Briefing({ onStoryClick }: BriefingProps) {
   const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const { language, t } = useLanguage();
 
   const handleListen = async (e: React.MouseEvent, story: Story) => {
     e.stopPropagation();
     if (speakingId === story.id) return;
     setSpeakingId(story.id);
     try {
-      const textToRead = `${story.title}. ${story.insights.join('. ')}. ${story.mattersToYou}`;
+      const title = language === 'hi' ? (story.titleHi || story.title) : story.title;
+      const insights = language === 'hi' ? (story.insightsHi || story.insights) : story.insights;
+      const mattersToYou = language === 'hi' ? (story.mattersToYouHi || story.mattersToYou) : story.mattersToYou;
+      
+      const textToRead = `${title}. ${insights.join('. ')}. ${mattersToYou}`;
       const audioUrl = await geminiService.textToSpeech(textToRead);
       if (audioUrl) {
         const audio = new Audio(audioUrl);
@@ -45,7 +51,9 @@ export function Briefing({ onStoryClick }: BriefingProps) {
             </div>
             <div className="flex flex-col">
               <span className="font-headline italic text-2xl tracking-tight text-primary">MyET</span>
-              <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant -mt-1">Your world, today</span>
+              <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant -mt-1">
+                {t('story.tagline')}
+              </span>
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -57,81 +65,90 @@ export function Briefing({ onStoryClick }: BriefingProps) {
       </header>
 
       <main className="pt-24 px-6 max-w-4xl mx-auto space-y-12">
-        {MOCK_STORIES.map((story, idx) => (
-          <motion.article 
-            key={story.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: idx * 0.1 }}
-            onClick={() => onStoryClick(story)}
-            className="bg-surface-container-low p-8 border-l-2 border-primary/20 cursor-pointer group hover:border-primary/40 transition-all"
-          >
-            <header className="mb-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-label text-xs text-primary uppercase tracking-[0.2em]">
-                  {story.updateInfo || story.category}
-                </span>
-                <div className="flex items-center gap-4">
-                  <button 
-                    onClick={(e) => handleListen(e, story)}
-                    className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-label uppercase tracking-widest transition-all ${
-                      speakingId === story.id 
-                        ? 'bg-primary text-on-primary animate-pulse' 
-                        : 'bg-surface-container-high text-on-surface-variant hover:bg-primary hover:text-on-primary'
-                    }`}
-                  >
-                    <div className="relative">
-                      <Volume2 className="w-3 h-3" />
-                      <Sparkles className="w-1.5 h-1.5 absolute -top-1 -right-1 text-primary-dim" />
-                    </div>
-                    {speakingId === story.id ? 'Listening...' : 'Listen'}
-                  </button>
-                  <span className="font-label text-xs text-on-surface-variant">{story.readTime}</span>
-                </div>
-              </div>
-              <h2 className="font-headline text-3xl md:text-4xl text-on-surface leading-tight group-hover:text-primary transition-colors">
-                {story.title}
-              </h2>
-            </header>
+        {MOCK_STORIES.map((story, idx) => {
+          const title = language === 'hi' ? (story.titleHi || story.title) : story.title;
+          const category = language === 'hi' ? (story.categoryHi || story.category) : story.category;
+          const updateInfo = language === 'hi' ? (story.updateInfoHi || story.updateInfo) : story.updateInfo;
+          const readTime = language === 'hi' ? (story.readTimeHi || story.readTime) : story.readTime;
+          const insights = language === 'hi' ? (story.insightsHi || story.insights) : story.insights;
+          const mattersToYou = language === 'hi' ? (story.mattersToYouHi || story.mattersToYou) : story.mattersToYou;
 
-            <div className="grid md:grid-cols-5 gap-8">
-              <div className="md:col-span-3 space-y-6">
-                <div className="space-y-3">
-                  <h3 className="font-label text-xs uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10 pb-1">Key Insights</h3>
-                  <ul className="space-y-4">
-                    {story.insights.map((insight, i) => (
-                      <li key={i} className="flex gap-4">
-                        <span className="text-primary mt-1 text-xs font-label">0{i + 1}</span>
-                        <p className="text-on-surface leading-relaxed text-sm">{insight}</p>
-                      </li>
+          return (
+            <motion.article 
+              key={story.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.1 }}
+              onClick={() => onStoryClick(story)}
+              className="bg-surface-container-low p-8 border-l-2 border-primary/20 cursor-pointer group hover:border-primary/40 transition-all"
+            >
+              <header className="mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-label text-xs text-primary uppercase tracking-[0.2em]">
+                    {updateInfo || category}
+                  </span>
+                  <div className="flex items-center gap-4">
+                    <button 
+                      onClick={(e) => handleListen(e, story)}
+                      className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-label uppercase tracking-widest transition-all ${
+                        speakingId === story.id 
+                          ? 'bg-primary text-on-primary animate-pulse' 
+                          : 'bg-surface-container-high text-on-surface-variant hover:bg-primary hover:text-on-primary'
+                      }`}
+                    >
+                      <div className="relative">
+                        <Volume2 className="w-3 h-3" />
+                        <Sparkles className="w-1.5 h-1.5 absolute -top-1 -right-1 text-primary-dim" />
+                      </div>
+                      {speakingId === story.id ? t('story.listening') : t('story.listen')}
+                    </button>
+                    <span className="font-label text-xs text-on-surface-variant">{readTime}</span>
+                  </div>
+                </div>
+                <h2 className="font-headline text-3xl md:text-4xl text-on-surface leading-tight group-hover:text-primary transition-colors">
+                  {title}
+                </h2>
+              </header>
+
+              <div className="grid md:grid-cols-5 gap-8">
+                <div className="md:col-span-3 space-y-6">
+                  <div className="space-y-3">
+                    <h3 className="font-label text-xs uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10 pb-1">{t('story.insights')}</h3>
+                    <ul className="space-y-4">
+                      {insights.map((insight, i) => (
+                        <li key={i} className="flex gap-4">
+                          <span className="text-primary mt-1 text-xs font-label">0{i + 1}</span>
+                          <p className="text-on-surface leading-relaxed text-sm">{insight}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="p-6 bg-surface-container-high/50 rounded-sm">
+                    <h4 className="font-label text-[10px] uppercase tracking-widest text-primary mb-3">{t('story.matters')}</h4>
+                    <p className="text-on-surface-variant text-sm italic">{mattersToYou}</p>
+                  </div>
+                </div>
+                <div className="md:col-span-2 space-y-6">
+                  <div className="aspect-video bg-surface-container-highest overflow-hidden rounded-sm">
+                    <img 
+                      alt={title} 
+                      className="w-full h-full object-cover grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-80 transition-all duration-500" 
+                      src={story.imageUrl} 
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {story.tags.map(tag => (
+                      <span key={tag} className="bg-surface-container-highest px-3 py-1 text-[10px] font-label text-on-surface-variant tracking-wider uppercase">
+                        {tag}
+                      </span>
                     ))}
-                  </ul>
-                </div>
-                <div className="p-6 bg-surface-container-high/50 rounded-sm">
-                  <h4 className="font-label text-[10px] uppercase tracking-widest text-primary mb-3">Why this matters to you</h4>
-                  <p className="text-on-surface-variant text-sm italic">{story.mattersToYou}</p>
+                  </div>
                 </div>
               </div>
-              <div className="md:col-span-2 space-y-6">
-                <div className="aspect-video bg-surface-container-highest overflow-hidden rounded-sm">
-                  <img 
-                    alt={story.title} 
-                    className="w-full h-full object-cover grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-80 transition-all duration-500" 
-                    src={story.imageUrl} 
-                    referrerPolicy="no-referrer"
-                  />
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {story.tags.map(tag => (
-                    <span key={tag} className="bg-surface-container-highest px-3 py-1 text-[10px] font-label text-on-surface-variant tracking-wider uppercase">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </motion.article>
-        ))}
+            </motion.article>
+          );
+        })}
       </main>
 
       <div className="fixed bottom-24 left-0 w-full px-6 z-40 flex justify-center pointer-events-none">
@@ -139,7 +156,7 @@ export function Briefing({ onStoryClick }: BriefingProps) {
           <Sparkles className="w-5 h-5 text-primary mr-4" />
           <input 
             className="bg-transparent border-none focus:ring-0 w-full text-on-surface placeholder:text-on-surface-variant/50 font-body text-sm" 
-            placeholder="Ask MyET about your world" 
+            placeholder={t('ask.placeholder')} 
             type="text"
           />
           <div className="flex items-center gap-2">

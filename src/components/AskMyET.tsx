@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import { cn } from '../lib/utils';
 import { float32ToInt16, base64ToUint8Array, uint8ArrayToBase64 } from '../lib/audioUtils';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface Message {
   role: 'user' | 'ai';
@@ -15,11 +16,14 @@ interface Message {
 }
 
 export function AskMyET() {
+  const { language, t } = useLanguage();
   const [messages, setMessages] = useState<Message[]>([
     {
-      role: 'user',
-      text: 'How is the semiconductor supply chain affecting automotive startups in Southeast Asia this quarter?',
-      timestamp: '10:42 AM'
+      role: 'ai',
+      text: language === 'hi' 
+        ? 'नमस्ते! मैं MyET हूँ। मैं आज आपकी भारतीय वित्त के बारे में कैसे सहायता कर सकता हूँ?' 
+        : 'Hello! I am MyET. How can I assist you with Indian finance today?',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);
   const [input, setInput] = useState('');
@@ -71,7 +75,10 @@ export function AskMyET() {
 
     try {
       // Use search grounding for up-to-date info as requested
-      const response = await geminiService.searchGrounding(messageText);
+      const prompt = language === 'hi' 
+        ? `कृपया इस प्रश्न का हिंदी में उत्तर दें: ${messageText}`
+        : messageText;
+      const response = await geminiService.searchGrounding(prompt);
 
       const aiMsg: Message = {
         role: 'ai',
@@ -167,7 +174,7 @@ export function AskMyET() {
           setIsLiveMode(true);
           setMessages(prev => [...prev, {
             role: 'ai',
-            text: 'Real-time intelligence ledger connected. How can I assist you today?',
+            text: t('ask.live.connected'),
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             isLive: true
           }]);
@@ -292,15 +299,19 @@ export function AskMyET() {
 
       <main ref={scrollRef} className="flex-1 pt-20 pb-32 px-6 max-w-4xl mx-auto w-full overflow-y-auto no-scrollbar">
         <div className="mb-8 flex items-center gap-3">
-          <span className="font-label text-[10px] uppercase tracking-[0.2em] text-on-surface-variant bg-surface-container-low px-3 py-1">Context Analysis</span>
-          <span className="text-xs text-on-surface-variant italic">Based on your recent activity</span>
+          <span className="font-label text-[10px] uppercase tracking-[0.2em] text-on-surface-variant bg-surface-container-low px-3 py-1">
+            {language === 'hi' ? 'संदर्भ विश्लेषण' : 'Context Analysis'}
+          </span>
+          <span className="text-xs text-on-surface-variant italic">
+            {language === 'hi' ? 'आपकी हालिया गतिविधि के आधार पर' : 'Based on your recent activity'}
+          </span>
         </div>
 
         <div className="space-y-12">
           {isLiveMode && (
             <div className="flex items-center gap-2 text-primary animate-pulse mb-4">
               <Radio className="w-4 h-4" />
-              <span className="font-label text-[10px] uppercase tracking-widest">Live Intelligence Session Active</span>
+              <span className="font-label text-[10px] uppercase tracking-widest">{t('ask.live.active')}</span>
             </div>
           )}
           {messages.map((msg, idx) => (
@@ -316,7 +327,7 @@ export function AskMyET() {
                 <div className="space-y-4">
                   <div className="border-l-2 border-primary pl-6 flex justify-between items-start">
                     <div>
-                      <h2 className="font-headline text-3xl text-on-surface leading-tight">Intelligence Ledger Response</h2>
+                      <h2 className="font-headline text-3xl text-on-surface leading-tight">{t('ask.ledger')}</h2>
                     </div>
                     <button 
                       onClick={() => playTTS(msg.text, idx)}
@@ -336,42 +347,10 @@ export function AskMyET() {
             </div>
           ))}
 
-          {/* Initial Mock Response Structure for Visual Fidelity */}
-          {messages.length === 1 && (
-            <div className="flex flex-col gap-8">
-              <div className="border-l-2 border-primary pl-6">
-                <h2 className="font-headline text-3xl text-on-surface leading-tight">Supply Chain Resilience & Regional Headwinds</h2>
-                <p className="font-label text-sm text-primary mt-1 tracking-wide uppercase">Sector: Automotive Tech • Region: SE Asia</p>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-1">
-                <div className="md:col-span-2 bg-surface-container-low p-8">
-                  <h3 className="font-headline text-xl mb-4 italic">Executive Summary</h3>
-                  <p className="text-on-surface-variant leading-relaxed">
-                    The shift from "just-in-time" to "just-in-case" inventory models has increased capital expenditure for early-stage automotive startups by <span className="text-primary font-medium">18% year-on-year</span>. While regional chip fabrication in Malaysia offers a buffer, specialized logic units remain constrained.
-                  </p>
-                </div>
-                <div className="bg-surface-container-high p-8 flex flex-col justify-between">
-                  <div>
-                    <span className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">Lead Entity</span>
-                    <div className="mt-2 flex items-baseline gap-2">
-                      <span className="font-headline text-2xl text-on-surface">VinFast</span>
-                      <TrendingDown className="w-4 h-4 text-error" />
-                    </div>
-                  </div>
-                  <div className="mt-6 border-t border-outline-variant/20 pt-4">
-                    <span className="font-label text-[10px] uppercase text-on-surface-variant">Risk Rating</span>
-                    <div className="text-xl font-label text-primary">MODERATE</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
           {isLoading && (
             <div className="flex items-center gap-2 text-primary animate-pulse">
               <SparklesIcon className="w-5 h-5" />
-              <span className="font-label text-xs uppercase tracking-widest">Analyzing markets...</span>
+              <span className="font-label text-xs uppercase tracking-widest">{t('ask.analyzing')}</span>
             </div>
           )}
         </div>
@@ -389,7 +368,7 @@ export function AskMyET() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
               className="bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-on-surface-variant w-full font-body text-base" 
-              placeholder={isRecording ? "Listening..." : "Ask anything about markets, startups, or your interests"}
+              placeholder={isRecording ? t('ask.listening') : t('ask.placeholder')}
               type="text"
               disabled={isRecording}
             />
@@ -400,7 +379,7 @@ export function AskMyET() {
                   "p-2 rounded-full transition-all",
                   isLiveMode ? "text-primary animate-pulse scale-110" : "text-on-surface-variant hover:text-primary"
                 )}
-                title="Live Voice Conversation"
+                title={language === 'hi' ? 'लाइव वॉयस बातचीत' : 'Live Voice Conversation'}
               >
                 <Radio className="w-6 h-6" />
               </button>
@@ -435,7 +414,7 @@ export function AskMyET() {
                 onClick={() => handleSend()}
                 className="bg-primary hover:bg-primary-dim text-on-primary font-label text-[10px] font-bold uppercase tracking-tighter px-4 py-1.5 rounded-full transition-transform active:scale-95"
               >
-                QUERY
+                {t('ask.query')}
               </button>
             </div>
           </div>
