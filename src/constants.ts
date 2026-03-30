@@ -1,5 +1,5 @@
 export interface Story {
-  id: string;
+  id: string | number;
   title: string;
   category: string;
   readTime: string;
@@ -9,6 +9,11 @@ export interface Story {
   tags: string[];
   imageUrl: string;
   content?: string;
+  dek?: string;      // Used in Explore.tsx
+  isBreaking?: boolean;
+  publishedAt?: string;
+  
+  // Hindi equivalents
   titleHi?: string;
   categoryHi?: string;
   readTimeHi?: string;
@@ -16,6 +21,7 @@ export interface Story {
   insightsHi?: string[];
   mattersToYouHi?: string;
   contentHi?: string;
+  dekHi?: string;
 }
 
 export const MOCK_STORIES: Story[] = [

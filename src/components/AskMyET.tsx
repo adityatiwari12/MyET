@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Mic, Send, Sparkles, Bell, TrendingDown, TrendingUp, StopCircle, Volume2, Radio } from 'lucide-react';
 import { geminiService } from '../services/geminiService';
+import { ApiService } from '../services/apiService';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import { cn } from '../lib/utils';
@@ -13,6 +14,9 @@ interface Message {
   timestamp: string;
   audioUrl?: string;
   isLive?: boolean;
+  insights?: string[];
+  sources?: { title: string; url: string; source: string }[];
+  suggestedFollowUps?: string[];
 }
 
 export function AskMyET() {
@@ -32,6 +36,8 @@ export function AskMyET() {
   const [isSpeaking, setIsSpeaking] = useState<number | null>(null);
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
+  const [sessionId, setSessionId] = useState<number>(0);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -45,6 +51,32 @@ export function AskMyET() {
   const nextPlayTimeRef = useRef(0);
 
   useEffect(() => {
+    // Load chat history from backend
+    const loadHistory = async () => {
+      try {
+        const data = await ApiService.getChatHistory();
+        if (data && data.sessionId) {
+          setSessionId(data.sessionId);
+          
+          if (data.messages && data.messages.length > 0) {
+            const formattedMessages = data.messages.map((m: any) => ({
+              role: m.role,
+              text: m.text || m.content,
+              timestamp: new Date(m.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            }));
+            
+            // If we have history, replace the default greeting with history, ensuring greeting is first if history is empty
+            if (formattedMessages.length > 0) {
+               setMessages(formattedMessages);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load chat history:", err);
+      }
+    };
+    loadHistory();
+
     return () => {
       stopLiveSession();
       if (audioContextRef.current) {
@@ -61,7 +93,7 @@ export function AskMyET() {
 
   const handleSend = async (textOverride?: string) => {
     const messageText = textOverride || input;
-    if (!messageText.trim()) return;
+    if (!messageText.trim() || !sessionId) return;
 
     const userMsg: Message = {
       role: 'user',
@@ -74,20 +106,28 @@ export function AskMyET() {
     setIsLoading(true);
 
     try {
-      // Use search grounding for up-to-date info as requested
       const prompt = language === 'hi' 
         ? `कृपया इस प्रश्न का हिंदी में उत्तर दें: ${messageText}`
         : messageText;
-      const response = await geminiService.searchGrounding(prompt);
+        
+      const response = await ApiService.chat(prompt, sessionId);
 
       const aiMsg: Message = {
         role: 'ai',
-        text: response.text || 'I am sorry, I could not process that request.',
+        text: (response as any).reply || 'I am sorry, I could not process that request.',
+        insights: (response as any).insights || [],
+        sources: (response as any).sources || [],
+        suggestedFollowUps: (response as any).suggestedFollowUps || [],
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setMessages(prev => [...prev, aiMsg]);
     } catch (error) {
       console.error(error);
+      setMessages(prev => [...prev, {
+        role: 'ai',
+        text: 'My intelligence engine is loading. Please try again in a moment.',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }]);
     } finally {
       setIsLoading(false);
     }
@@ -110,8 +150,11 @@ export function AskMyET() {
         reader.readAsDataURL(audioBlob);
         reader.onloadend = async () => {
           const base64Audio = (reader.result as string).split(',')[1];
-          setIsLoading(true);
           try {
+            // Need to ensure ApiService has this method or just fallback if not.
+            // But we already updated geminiService.ts to use ApiService under the hood! 
+            // Wait, we can just use ApiService.transcribe (if we add it) or keep geminiService which we already proxied.
+            // For consistency, let's use the proxied geminiService we already wrote:
             const transcription = await geminiService.transcribeAudio(base64Audio, 'audio/webm');
             if (transcription) {
               handleSend(transcription);
@@ -140,16 +183,22 @@ export function AskMyET() {
   };
 
   const playTTS = async (text: string, index: number) => {
-    if (isSpeaking === index) return;
+    if (isSpeaking === index) {
+      geminiService.stopSpeech();
+      setIsSpeaking(null);
+      return;
+    }
     setIsSpeaking(index);
     try {
-      const audioUrl = await geminiService.textToSpeech(text);
+      const audioUrl = await geminiService.textToSpeech(text, language);
       if (audioUrl) {
         const audio = new Audio(audioUrl);
         audio.onended = () => setIsSpeaking(null);
+        audio.onerror = () => setIsSpeaking(null);
         audio.play();
       } else {
-        setIsSpeaking(null);
+        // Web Speech API handled it — clear after estimated duration
+        setTimeout(() => setIsSpeaking(null), text.length * 50);
       }
     } catch (error) {
       console.error('TTS error:', error);
@@ -227,10 +276,12 @@ export function AskMyET() {
         const int16Data = float32ToInt16(inputData);
         const base64Data = uint8ArrayToBase64(new Uint8Array(int16Data.buffer));
         
-        sessionPromise.then(session => {
-          session.sendRealtimeInput({
-            audio: { data: base64Data, mimeType: 'audio/pcm;rate=16000' }
-          });
+        Promise.resolve(sessionPromise).then((session: any) => {
+          if (session && session.sendRealtimeInput) {
+            session.sendRealtimeInput({
+              audio: { data: base64Data, mimeType: 'audio/pcm;rate=16000' }
+            });
+          }
         });
       };
 
@@ -266,7 +317,9 @@ export function AskMyET() {
 
   const stopLiveSession = () => {
     if (liveSessionRef.current) {
-      liveSessionRef.current.then((s: any) => s.close());
+      Promise.resolve(liveSessionRef.current).then((s: any) => {
+        if (s && s.close) s.close();
+      });
       liveSessionRef.current = null;
     }
     if (audioInputProcessorRef.current) {
@@ -342,6 +395,58 @@ export function AskMyET() {
                   <div className="bg-surface-container-low p-8 rounded-sm prose prose-invert max-w-none">
                     <ReactMarkdown>{msg.text}</ReactMarkdown>
                   </div>
+
+                  {/* RAG Insights */}
+                  {msg.insights && msg.insights.length > 0 && (
+                    <div className="pl-6 space-y-2">
+                      <p className="font-label text-[10px] uppercase tracking-widest text-primary">Key Takeaways</p>
+                      <ul className="space-y-2">
+                        {msg.insights.map((insight, i) => (
+                          <li key={i} className="flex gap-3 text-sm text-on-surface-variant">
+                            <span className="text-primary font-label text-xs shrink-0 mt-0.5">0{i + 1}</span>
+                            <span>{insight}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* RAG Sources */}
+                  {msg.sources && msg.sources.length > 0 && (
+                    <div className="pl-6 flex flex-wrap gap-2">
+                      <span className="font-label text-[10px] text-on-surface-variant uppercase tracking-widest w-full">Sources</span>
+                      {msg.sources.map((src, i) => (
+                        <a
+                          key={i}
+                          href={src.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 bg-surface-container-high px-3 py-1 rounded-full text-[10px] font-label text-on-surface-variant hover:text-primary transition-colors"
+                        >
+                          <TrendingUp className="w-2.5 h-2.5" />
+                          {src.source}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Suggested Follow-Ups */}
+                  {msg.suggestedFollowUps && msg.suggestedFollowUps.length > 0 && (
+                    <div className="pl-6 space-y-2">
+                      <p className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant">Ask Next</p>
+                      <div className="flex flex-wrap gap-2">
+                        {msg.suggestedFollowUps.map((q, i) => (
+                          <button
+                            key={i}
+                            onClick={() => { setInput(q); }}
+                            className="text-[11px] px-3 py-1.5 rounded-full bg-surface-container-high text-on-surface-variant hover:bg-primary/20 hover:text-primary transition-colors text-left font-body"
+                          >
+                            {q}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

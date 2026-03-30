@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { INTERESTS, INTERESTS_HI } from '../constants';
-import { ChevronRight, ChevronLeft, Sparkles, Check } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Sparkles, Check, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { ApiService } from '../services/apiService';
 
 interface OnboardingProps {
   onComplete: () => void;
@@ -17,10 +18,17 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [risk, setRisk] = useState('');
   const [horizon, setHorizon] = useState('');
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [state, setState] = useState('');
   const [city, setCity] = useState('');
   const [occupation, setOccupation] = useState('');
   const [family, setFamily] = useState('');
+  const [incomeRange, setIncomeRange] = useState('');
+  const [financialGoal, setFinancialGoal] = useState('');
+  
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   const currentInterests = language === 'hi' ? INTERESTS_HI : INTERESTS;
 
@@ -66,8 +74,59 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     );
   };
 
-  const nextStep = () => setStep(s => Math.min(s + 1, 4));
-  const prevStep = () => setStep(s => Math.max(s - 1, 0));
+  const nextStep = () => {
+    setError('');
+    // Basic validation before allowing next step
+    if (step === 1) {
+      if (!name || !email || !password) {
+        setError('Name, Email, and Password are required to create your account.');
+        return;
+      }
+    }
+    setStep(s => Math.min(s + 1, 4));
+  };
+  
+  const prevStep = () => {
+    setError('');
+    setStep(s => Math.max(s - 1, 0));
+  };
+
+  const handleComplete = async () => {
+    try {
+      setIsSubmitting(true);
+      setError('');
+      
+      const payload = {
+        email,
+        password,
+        name,
+        state,
+        city,
+        occupation,
+        familyStatus: family,
+        language,
+        financialGoal,
+        investments,
+        riskTolerance: risk,
+        investmentHorizon: horizon,
+        incomeRange,
+        interests: selectedInterests
+      };
+
+      const response = await ApiService.register(payload);
+      
+      if (response.token) {
+        localStorage.setItem('token', response.token);
+        localStorage.setItem('user', JSON.stringify(response.user));
+        onComplete();
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Registration failed. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const investmentOptions = [
     { id: 'realestate', label: t('onboarding.realestate') },
@@ -123,6 +182,12 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             />
           </div>
 
+          {error && (
+            <div className="mb-6 p-4 bg-error-container text-on-error-container rounded-lg text-sm border border-error/20">
+              {error}
+            </div>
+          )}
+
           <AnimatePresence mode="wait">
             {step === 0 && (
               <motion.div
@@ -172,13 +237,41 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               >
                 <h2 className="font-headline text-2xl font-medium mb-6">{t('onboarding.step1.title')}</h2>
                 <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-label text-xs uppercase tracking-widest text-on-surface-variant mb-2">Name *</label>
+                      <input 
+                        type="text" 
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        placeholder="John Doe"
+                        className="w-full bg-surface-container p-4 rounded-lg border border-outline-variant/20 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all font-body text-on-surface" 
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-label text-xs uppercase tracking-widest text-on-surface-variant mb-2">Email *</label>
+                      <input 
+                        type="email" 
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                        placeholder="john@example.com"
+                        className="w-full bg-surface-container p-4 rounded-lg border border-outline-variant/20 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all font-body text-on-surface" 
+                        required
+                      />
+                    </div>
+                  </div>
+                  
                   <div>
-                    <label className="block font-label text-xs uppercase tracking-widest text-on-surface-variant mb-2">{t('onboarding.name')}</label>
+                    <label className="block font-label text-xs uppercase tracking-widest text-on-surface-variant mb-2">Password *</label>
                     <input 
-                      type="text" 
-                      value={name}
-                      onChange={e => setName(e.target.value)}
+                      type="password" 
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      placeholder="••••••••"
                       className="w-full bg-surface-container p-4 rounded-lg border border-outline-variant/20 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all font-body text-on-surface" 
+                      required
+                      minLength={6}
                     />
                   </div>
                   
@@ -305,7 +398,13 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 
                 <div className="space-y-4">
                   <label className="block font-label text-xs uppercase tracking-widest text-on-surface-variant mb-2">{t('onboarding.income')}</label>
-                  <input type="text" placeholder="e.g. ₹10L - ₹15L" className="w-full bg-surface-container p-4 rounded-lg border border-outline-variant/20 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all font-body text-on-surface" />
+                  <input 
+                    type="text" 
+                    placeholder="e.g. ₹10L - ₹15L" 
+                    value={incomeRange}
+                    onChange={e => setIncomeRange(e.target.value)}
+                    className="w-full bg-surface-container p-4 rounded-lg border border-outline-variant/20 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all font-body text-on-surface" 
+                  />
                 </div>
 
                 <div className="space-y-4">
@@ -384,9 +483,11 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           <div className="mt-12 flex items-center justify-between pt-6 border-t border-outline-variant/10">
             <button 
               onClick={prevStep}
+              disabled={isSubmitting}
               className={cn(
                 "flex items-center gap-2 px-4 py-2 font-label text-xs uppercase tracking-widest transition-colors",
-                step === 0 ? "opacity-0 pointer-events-none" : "text-on-surface-variant hover:text-on-surface"
+                step === 0 ? "opacity-0 pointer-events-none" : "text-on-surface-variant hover:text-on-surface",
+                isSubmitting && "opacity-50 pointer-events-none"
               )}
             >
               <ChevronLeft className="w-4 h-4" />
@@ -396,18 +497,29 @@ export function Onboarding({ onComplete }: OnboardingProps) {
             {step < 4 ? (
               <button 
                 onClick={nextStep}
-                className="flex items-center gap-2 bg-primary text-on-primary px-6 py-3 rounded-full font-label text-xs uppercase tracking-widest hover:bg-primary-dim transition-all active:scale-95"
+                disabled={isSubmitting}
+                className="flex items-center gap-2 bg-primary text-on-primary px-6 py-3 rounded-full font-label text-xs uppercase tracking-widest hover:bg-primary-dim transition-all active:scale-95 disabled:opacity-50"
               >
                 {t('onboarding.next')}
                 <ChevronRight className="w-4 h-4" />
               </button>
             ) : (
               <button 
-                onClick={onComplete}
-                className="flex items-center gap-2 bg-primary text-on-primary px-6 py-3 rounded-full font-label text-xs uppercase tracking-widest hover:bg-primary-dim transition-all active:scale-95"
+                onClick={handleComplete}
+                disabled={isSubmitting}
+                className="flex items-center gap-2 bg-primary text-on-primary px-6 py-3 rounded-full font-label text-xs uppercase tracking-widest hover:bg-primary-dim transition-all active:scale-95 disabled:opacity-50"
               >
-                {t('onboarding.complete')}
-                <Sparkles className="w-4 h-4" />
+                {isSubmitting ? (
+                  <>
+                    Creating Account...
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  </>
+                ) : (
+                  <>
+                    {t('onboarding.complete')}
+                    <Sparkles className="w-4 h-4" />
+                  </>
+                )}
               </button>
             )}
           </div>

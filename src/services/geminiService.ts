@@ -1,91 +1,104 @@
-import { GoogleGenAI, GenerateContentResponse, Modality } from "@google/genai";
+import { ApiService } from './apiService';
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+/**
+ * Speaks text using Web Speech API (browser-native TTS)
+ * This is the reliable fallback — works in all modern browsers
+ */
+function speakWithWebSpeech(text: string, lang = 'en-IN'): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (!('speechSynthesis' in window)) {
+      reject(new Error('Web Speech API not supported'));
+      return;
+    }
+    window.speechSynthesis.cancel(); // stop any ongoing speech
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang;
+    utterance.rate = 0.95;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+
+    // Try to use an Indian English voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const indiaVoice = voices.find(v => v.lang.includes('en-IN') || v.lang.includes('hi-IN') || v.name.includes('India'));
+    if (indiaVoice) utterance.voice = indiaVoice;
+
+    utterance.onend = () => resolve();
+    utterance.onerror = (e) => reject(e);
+    window.speechSynthesis.speak(utterance);
+  });
+}
 
 export const geminiService = {
-  async chat(message: string, history: { role: string; parts: { text: string }[] }[] = []) {
-    const chat = ai.chats.create({
-      model: "gemini-3-flash-preview",
-      config: {
-        systemInstruction: "You are MyET, an advanced financial intelligence assistant. Provide concise, authoritative, and data-driven insights. Use a professional, editorial tone.",
-      },
-      history: history,
-    });
-
-    const response = await chat.sendMessage({ message });
-    return response.text;
+  async chat(message: string, sessionId?: number, context?: any) {
+    try {
+      const resp = await ApiService.chat(message, sessionId || Date.now(), context);
+      return typeof resp === 'object' && 'reply' in resp ? (resp as any).reply : resp;
+    } catch (e) {
+      console.error('Chat error:', e);
+      return "I'm having trouble connecting right now. Please try again later.";
+    }
   },
 
   async searchGrounding(query: string) {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: query,
-      config: {
-        tools: [{ googleSearch: {} }],
-      },
-    });
-    return {
-      text: response.text,
-      sources: response.candidates?.[0]?.groundingMetadata?.groundingChunks || [],
-    };
+    try {
+      const resp = await ApiService.searchGrounding(query);
+      return {
+        text: resp.answer,
+        sources: [],
+      };
+    } catch (e) {
+      console.error('Search error:', e);
+      return { text: "Search temporarily unavailable", sources: [] };
+    }
   },
 
   async analyzeComplex(content: string) {
-    const response = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
-      contents: `Analyze the following financial content and provide a bento-style impact analysis with key drivers and strategic shifts: ${content}`,
-    });
-    return response.text;
-  },
-
-  async textToSpeech(text: string) {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' },
-          },
-        },
-      },
-    });
-
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (base64Audio) {
-      return `data:audio/mpeg;base64,${base64Audio}`;
+    try {
+      const resp = await ApiService.summarize(`Analyze the following financial content and provide a bento-style impact analysis with key drivers and strategic shifts: ${content}`);
+      return resp.analysis;
+    } catch (e) {
+      console.error('Analysis error:', e);
+      return "Analysis temporarily unavailable";
     }
-    return null;
   },
 
+  /**
+   * Text-to-Speech with Gemini → Web Speech API fallback
+   * Returns a data URL (Gemini) OR null (Web Speech ongoing) OR null (failed)
+   */
+  async textToSpeech(text: string, lang = 'en'): Promise<string | null> {
+    // Override: Immediately use Web Speech API to guarantee instant playback
+    // and prevent browsers blocking audio due to async gaps from hitting 429 rate limit APIs.
+    try {
+      const speechLang = lang === 'hi' ? 'hi-IN' : 'en-IN';
+      await speakWithWebSpeech(text, speechLang);
+      return null;
+    } catch (e) {
+      console.error('[TTS] Web Speech failed:', e);
+      return null;
+    }
+  },
+
+  /**
+   * Stop any currently playing speech (Web Speech API)
+   */
+  stopSpeech() {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+  },
+
+  // Transcribe is not implemented server-side — return empty
   async transcribeAudio(base64Audio: string, mimeType: string) {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: [
-        {
-          inlineData: {
-            data: base64Audio,
-            mimeType: mimeType,
-          },
-        },
-        { text: "Transcribe this audio exactly as spoken. Output ONLY the transcribed text, no preamble, no quotes, and no explanations. If the audio is silent or unintelligible, return an empty string." },
-      ],
-    });
-    return response.text?.trim() || "";
+    return "";
   },
 
+  // Live audio remains stubbed
   connectLive(callbacks: any) {
-    return ai.live.connect({
-      model: "gemini-2.5-flash-native-audio-preview-12-2025",
-      callbacks,
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } },
-        },
-        systemInstruction: "You are MyET, an advanced financial intelligence assistant. You are in a real-time voice conversation. Be concise, professional, and helpful.",
-      },
-    });
+    console.warn("Live Audio not supported via backend proxy yet");
+    return {
+      disconnect() {},
+      send() {}
+    };
   }
 };

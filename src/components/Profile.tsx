@@ -1,8 +1,9 @@
 import { Bell, Wallet, Lock, LogOut, ChevronRight, Check } from 'lucide-react';
 import { INTERESTS, INTERESTS_HI } from '../constants';
 import { cn } from '../lib/utils';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { ApiService } from '../services/apiService';
 
 interface ProfileProps {
   onLogout?: () => void;
@@ -10,14 +11,54 @@ interface ProfileProps {
 
 export function Profile({ onLogout }: ProfileProps) {
   const { language, setLanguage, t } = useLanguage();
-  const [selectedInterests, setSelectedInterests] = useState(["NSE/BSE", "Indian Fintech", "RBI Policy"]);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [stats, setStats] = useState({ totalRead: 0, interactions: 0 });
+  const [user, setUser] = useState<any>(null);
 
-  const toggleInterest = (interest: string) => {
-    setSelectedInterests(prev => 
-      prev.includes(interest) 
-        ? prev.filter(i => i !== interest)
-        : [...prev, interest]
-    );
+  useEffect(() => {
+    const loadProfileData = async () => {
+      try {
+        const [meData, statsData] = await Promise.all([
+          ApiService.getMe(),
+          ApiService.getStats()
+        ]);
+        if (meData.user) {
+          setUser(meData.user);
+          if (meData.user.preferences?.interests) {
+            setSelectedInterests(meData.user.preferences.interests);
+          } else {
+             // Fallback default
+             setSelectedInterests(["NSE/BSE", "Indian Fintech", "RBI Policy"]);
+          }
+        }
+        if (statsData.stats) {
+          setStats({
+            totalRead: statsData.stats.read || 0,
+            interactions: (statsData.stats.likes || 0) + (statsData.stats.shares || 0) + (statsData.stats.saves || 0)
+          });
+        }
+      } catch (err) {
+        console.error("Failed to load profile data:", err);
+      }
+    };
+    loadProfileData();
+  }, []);
+
+  const toggleInterest = async (interest: string) => {
+    const newInterests = selectedInterests.includes(interest) 
+      ? selectedInterests.filter(i => i !== interest)
+      : [...selectedInterests, interest];
+      
+    // Optimistic UI update
+    setSelectedInterests(newInterests);
+    
+    // Sync with backend
+    try {
+      await ApiService.updateProfile({ preferences: { interests: newInterests } });
+    } catch (err) {
+      console.error("Failed to update preferences:", err);
+      // Revert if failed (simplistic approach)
+    }
   };
 
   const currentInterests = language === 'hi' ? INTERESTS_HI : INTERESTS;
@@ -27,11 +68,18 @@ export function Profile({ onLogout }: ProfileProps) {
       <header className="bg-surface text-primary flex justify-between items-center px-6 h-16 w-full fixed top-0 z-50 border-b border-outline-variant/10">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center overflow-hidden border border-outline-variant/20">
-            <img 
-              className="w-full h-full object-cover" 
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7Dy1ZOoG3qrGYaWceTkSldxv0x6ibiWt4DvI3CFL_F1lULhSBoXx1ZOXUtftSJloX6-AdPKEPC097pOB24EK_G93py1LFs8tF1KMZZYRD-GgDHwft9kGSYO9n0folte6YCT6eClFCMqi7ZarN8kCttvsLiyd2jiRC-OaPo3ZyrivXjEFYlGNdp2fW5vpif2Vy0m2Xc86vl21B2o6hDKImrwNRvUZKzxLOcXXGA_OVyurHtplylCp5eQoeWXRAlyPGh8V9BxWnng" 
-              referrerPolicy="no-referrer"
-            />
+            {user ? (
+               <div className="w-full h-full bg-primary flex items-center justify-center text-on-primary font-bold text-sm uppercase">
+                 {user.name ? user.name.charAt(0) : user.email.charAt(0)}
+               </div>
+            ) : (
+              <img 
+                className="w-full h-full object-cover" 
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7Dy1ZOoG3qrGYaWceTkSldxv0x6ibiWt4DvI3CFL_F1lULhSBoXx1ZOXUtftSJloX6-AdPKEPC097pOB24EK_G93py1LFs8tF1KMZZYRD-GgDHwft9kGSYO9n0folte6YCT6eClFCMqi7ZarN8kCttvsLiyd2jiRC-OaPo3ZyrivXjEFYlGNdp2fW5vpif2Vy0m2Xc86vl21B2o6hDKImrwNRvUZKzxLOcXXGA_OVyurHtplylCp5eQoeWXRAlyPGh8V9BxWnng" 
+                referrerPolicy="no-referrer"
+                alt="Profile avatar"
+              />
+            )}
           </div>
           <span className="font-headline italic text-2xl tracking-tight text-primary">MyET</span>
         </div>
@@ -42,13 +90,15 @@ export function Profile({ onLogout }: ProfileProps) {
 
       <main className="max-w-screen-md mx-auto px-6 pt-24 space-y-12">
         <section className="space-y-2">
-          <h1 className="font-headline text-5xl font-extrabold tracking-tight text-on-surface">{t('profile.title')}</h1>
+          <h1 className="font-headline text-5xl font-extrabold tracking-tight text-on-surface">
+            {user ? `Hi, ${user.name || user.email.split('@')[0]}` : t('profile.title')}
+          </h1>
           <p className="font-body text-on-surface-variant max-w-prose text-lg">{t('profile.subtitle')}</p>
         </section>
 
         <section className="grid grid-cols-1 md:grid-cols-3 gap-1">
-          <StatCard label={t('profile.stat.briefs')} value="12" />
-          <StatCard label={t('profile.stat.insights')} value="482" />
+          <StatCard label={t('profile.stat.briefs')} value={stats.totalRead.toString()} />
+          <StatCard label={t('profile.stat.insights')} value={stats.interactions.toString()} />
           <StatCard label={t('profile.stat.rank')} value="Top 5%" />
         </section>
 
